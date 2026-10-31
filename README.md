@@ -3,26 +3,69 @@
 [![CI](https://github.com/houshibo0101/survey-app/actions/workflows/ci.yml/badge.svg)](https://github.com/houshibo0101/survey-app/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/houshibo0101/survey-app/blob/main/LICENSE)
 
-一套可直接部署的问卷调研系统：注册登录、按人授权查看结果、为指定用户伪装作答选项、接入 AI 按提示词批量出题。
+一套可自托管的问卷调研系统：注册登录、按人授权查看结果、为指定用户伪装作答选项、接入 AI 按提示词批量出题。
 
 - 后端：Python 3 标准库（无需安装任何第三方依赖）
 - 前端：原生 HTML/CSS/JS 单页应用（无需构建）
 - 数据：SQLite（单文件，便于备份）
-- 部署：systemd + nginx 反向代理，cpolar 内网穿透
+- 部署：systemd + nginx 反向代理，cpolar 内网穿透（可选）
 
-## 访问地址
+## 快速部署
 
-| 入口 | 地址 |
-| --- | --- |
-| 公网（cpolar） | https://<你的 cpolar 域名> |
-| 局域网 | http://<服务器内网 IP>/survey/ |
-| 本机后端 | http://127.0.0.1:8090/api/health |
+环境要求：Linux + Python 3.8 及以上；nginx 与 cpolar 均为可选。
 
-公网地址由 `cpolar-survey` 服务维护，随时可运行 `/opt/survey-app/current-url.sh` 查看当前地址。
+```bash
+# 1. 取代码
+git clone https://github.com/houshibo0101/survey-app.git /opt/survey-app
+cd /opt/survey-app
+
+# 2. 写环境变量（首次启动用它创建管理员账号）
+cat > .env <<'EOF'
+PORT=8090
+HOST=127.0.0.1
+SURVEY_DATA=/opt/survey-app/data
+SURVEY_ADMIN_PASSWORD=换成你的强密码
+EOF
+chmod 600 .env
+mkdir -p data && chown -R "$USER":"$USER" /opt/survey-app
+
+# 3. 安装成系统服务
+sudo cp deploy/survey-app.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now survey-app
+
+# 4. 自检
+curl -s http://127.0.0.1:8090/api/health     # => {"ok": true, ...}
+```
+
+> `deploy/survey-app.service` 默认 `User=mc`，请改成你服务器上的实际用户。
+
+**挂到子路径（nginx）**
+
+```bash
+sudo cp deploy/nginx-survey.conf /etc/nginx/snippets/survey.conf
+# 在站点的 server { ... } 中加入一行：include /etc/nginx/snippets/survey.conf;
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+之后访问 `http://<服务器 IP>/survey/`，管理员 `admin`，密码为 `.env` 里的 `SURVEY_ADMIN_PASSWORD`（`deploy/install.sh` 会自动生成随机密码并写入 `ADMIN_PASSWORD.txt`）。
+
+**公网访问（cpolar，可选）**
+
+```bash
+cpolar http 8090 -log=/opt/survey-app/cpolar-survey.log &
+/opt/survey-app/current-url.sh      # 打印当前公网地址
+```
+
+需要开机自启时，安装 `deploy/cpolar-survey.service` 并把其中的 Token 配置路径改成你自己的。
+
+> 仓库里的 `deploy/install.sh` 是作者环境的一键脚本（固定了 `/opt/survey-app` 与用户 `mc`），直接使用前请按注释调整路径与用户；上面的手动步骤是通用的。
+
+端口修改、升级、回滚等完整步骤见 [部署指南](https://github.com/houshibo0101/survey-app/wiki/部署指南)。
 
 ## 账号
 
-- 初始管理员：`admin`，密码见服务器 `/opt/survey-app/ADMIN_PASSWORD.txt`（安装时随机生成，仅 root/mc 可读）。
+- 初始管理员：`admin`，密码为 `.env` 中的 `SURVEY_ADMIN_PASSWORD`（未设置时默认 `admin123`，生产环境务必修改）。
 - 普通参与者可自行注册，也可以由管理员在「用户管理」中创建。
 - 登录后右上角「修改密码」可自助改密；管理员还能重置任意用户密码。
 
@@ -76,21 +119,18 @@ systemctl status survey-app
 systemctl restart survey-app
 journalctl -u survey-app -n 100 --no-pager
 
-# 公网隧道状态 / 重启 / 当前地址
-systemctl status cpolar-survey
-systemctl restart cpolar-survey
-/opt/survey-app/current-url.sh
-grep -a -o -E "https://[a-zA-Z0-9.-]+\.cpolar\.[a-z]+" /opt/survey-app/cpolar-survey.log | tail -1
-
 # 修改端口等环境变量
 vi /opt/survey-app/.env && systemctl restart survey-app
 
 # 备份数据（全部业务数据就在一个文件里）
-cp /opt/survey-app/data/survey.db /path/to/backup/survey-$(date +%F).db
+cp /opt/survey-app/data/survey.db /backup/survey-$(date +%F).db
 
-# 重新部署代码
-scp -r 本地目录/* mc@<服务器 IP>:/tmp/survey-install/ && \
-  ssh mc@<服务器 IP> "echo 密码 | sudo -S -p '' bash /tmp/survey-install/deploy/install.sh"
+# 更新代码（服务器上是 git 仓库时）
+cd /opt/survey-app && git pull && systemctl restart survey-app
+
+# 公网隧道（如使用 cpolar）
+systemctl status cpolar-survey
+/opt/survey-app/current-url.sh
 ```
 
 ### 网络结构
@@ -102,7 +142,7 @@ scp -r 本地目录/* mc@<服务器 IP>:/tmp/survey-install/ && \
    127.0.0.1:8090  survey-app.service (Python)
         ▲
         │  /survey/ 反向代理（nginx :80）
-   局域网 http://<服务器内网 IP>/survey/
+   局域网 http://<服务器 IP>/survey/
 ```
 
 ## 目录结构
@@ -116,7 +156,7 @@ scp -r 本地目录/* mc@<服务器 IP>:/tmp/survey-install/ && \
 ├── deploy/            # systemd 单元、nginx 片段、安装脚本
 ├── data/survey.db     # 业务数据（自动创建）
 ├── .env               # 端口、数据目录、初始管理员密码
-└── ADMIN_PASSWORD.txt # 初始管理员密码
+└── ADMIN_PASSWORD.txt # 一键脚本生成的初始管理员密码
 ```
 
 ## 手机端适配
@@ -129,22 +169,21 @@ scp -r 本地目录/* mc@<服务器 IP>:/tmp/survey-install/ && \
 - 结果统计的条形图、可见性矩阵、AI 生成列表都做了窄屏压缩；矩阵保留横向滑动 + 首列吸附。
 - 弹窗在手机上改为底部抽屉样式。
 
-刷新页面（必要时 Ctrl+F5）即可看到效果，也可以直接用手机访问 https://<你的 cpolar 域名>。
-
 ## 安全建议
 
 1. 首次登录后立即修改 `admin` 密码。
 2. `SURVEY_ADMIN_PASSWORD` 只在首次初始化时使用，改密后可从 `.env` 删除。
-3. 公网地址由 cpolar 隧道提供（`cpolar-survey` 服务）；更换 cpolar 账号或隧道配置后地址会变化，运行 `/opt/survey-app/current-url.sh` 即可获取最新地址。
-4. 系统未实现登录失败锁定，若暴露在公网建议在 nginx 层增加访问频率限制。
+3. 公网暴露时建议在 nginx 层增加访问频率限制与 HTTPS。
+4. 系统未实现登录失败锁定，公网部署请使用强密码。
 
 ## 文档
 
 更详细的说明见 [Wiki](https://github.com/houshibo0101/survey-app/wiki)：
 
-- [快速开始](https://github.com/houshibo0101/survey-app/wiki/%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B)
-- [功能说明](https://github.com/houshibo0101/survey-app/wiki/%E5%8A%9F%E8%83%BD%E8%AF%B4%E6%98%8E)
-- [AI 配置与提示词](https://github.com/houshibo0101/survey-app/wiki/AI-%E9%85%8D%E7%BD%AE)
-- [部署指南](https://github.com/houshibo0101/survey-app/wiki/%E9%83%A8%E7%BD%B2%E6%8C%87%E5%8D%97)
-- [数据与备份](https://github.com/houshibo0101/survey-app/wiki/%E6%95%B0%E6%8D%AE%E4%B8%8E%E5%A4%87%E4%BB%BD)
-- [常见问题](https://github.com/houshibo0101/survey-app/wiki/%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98)
+- [快速开始](https://github.com/houshibo0101/survey-app/wiki/快速开始)
+- [功能说明](https://github.com/houshibo0101/survey-app/wiki/功能说明)
+- [AI 配置与提示词](https://github.com/houshibo0101/survey-app/wiki/AI-配置)
+- [部署指南](https://github.com/houshibo0101/survey-app/wiki/部署指南)
+- [数据与备份](https://github.com/houshibo0101/survey-app/wiki/数据与备份)
+- [常见问题](https://github.com/houshibo0101/survey-app/wiki/常见问题)
+- [开发说明](https://github.com/houshibo0101/survey-app/wiki/开发说明)
