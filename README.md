@@ -1,5 +1,8 @@
 # 调查问卷系统
 
+[![CI](https://github.com/houshibo0101/survey-app/actions/workflows/ci.yml/badge.svg)](https://github.com/houshibo0101/survey-app/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/houshibo0101/survey-app/blob/main/LICENSE)
+
 一套可直接部署的问卷调研系统：注册登录、按人授权查看结果、为指定用户伪装作答选项、接入 AI 按提示词批量出题。
 
 - 后端：Python 3 标准库（无需安装任何第三方依赖）
@@ -11,8 +14,8 @@
 
 | 入口 | 地址 |
 | --- | --- |
-| 公网（cpolar） | https://6177ba78.r10.vip.cpolar.cn |
-| 局域网 | http://192.168.9.108/survey/ |
+| 公网（cpolar） | https://<你的 cpolar 域名> |
+| 局域网 | http://<服务器内网 IP>/survey/ |
 | 本机后端 | http://127.0.0.1:8090/api/health |
 
 公网地址由 `cpolar-survey` 服务维护，随时可运行 `/opt/survey-app/current-url.sh` 查看当前地址。
@@ -86,20 +89,20 @@ vi /opt/survey-app/.env && systemctl restart survey-app
 cp /opt/survey-app/data/survey.db /path/to/backup/survey-$(date +%F).db
 
 # 重新部署代码
-scp -r 本地目录/* mc@192.168.9.108:/tmp/survey-install/ && \
-  ssh mc@192.168.9.108 "echo 密码 | sudo -S -p '' bash /tmp/survey-install/deploy/install.sh"
+scp -r 本地目录/* mc@<服务器 IP>:/tmp/survey-install/ && \
+  ssh mc@<服务器 IP> "echo 密码 | sudo -S -p '' bash /tmp/survey-install/deploy/install.sh"
 ```
 
 ### 网络结构
 
 ```
-公网 https://6177ba78.r10.vip.cpolar.cn
+公网 https://<你的 cpolar 域名>
         │  (cpolar 隧道: cpolar-survey.service → 127.0.0.1:8090)
         ▼
    127.0.0.1:8090  survey-app.service (Python)
         ▲
         │  /survey/ 反向代理（nginx :80）
-   局域网 http://192.168.9.108/survey/
+   局域网 http://<服务器内网 IP>/survey/
 ```
 
 ## 目录结构
@@ -126,7 +129,7 @@ scp -r 本地目录/* mc@192.168.9.108:/tmp/survey-install/ && \
 - 结果统计的条形图、可见性矩阵、AI 生成列表都做了窄屏压缩；矩阵保留横向滑动 + 首列吸附。
 - 弹窗在手机上改为底部抽屉样式。
 
-刷新页面（必要时 Ctrl+F5）即可看到效果，也可以直接用手机访问 https://6177ba78.r10.vip.cpolar.cn。
+刷新页面（必要时 Ctrl+F5）即可看到效果，也可以直接用手机访问 https://<你的 cpolar 域名>。
 
 ## 安全建议
 
@@ -134,3 +137,14 @@ scp -r 本地目录/* mc@192.168.9.108:/tmp/survey-install/ && \
 2. `SURVEY_ADMIN_PASSWORD` 只在首次初始化时使用，改密后可从 `.env` 删除。
 3. 公网地址由 cpolar 隧道提供（`cpolar-survey` 服务）；更换 cpolar 账号或隧道配置后地址会变化，运行 `/opt/survey-app/current-url.sh` 即可获取最新地址。
 4. 系统未实现登录失败锁定，若暴露在公网建议在 nginx 层增加访问频率限制。
+
+## 文档
+
+更详细的说明见 [Wiki](https://github.com/houshibo0101/survey-app/wiki)：
+
+- [快速开始](https://github.com/houshibo0101/survey-app/wiki/%E5%BF%AB%E9%80%9F%E5%BC%80%E5%A7%8B)
+- [功能说明](https://github.com/houshibo0101/survey-app/wiki/%E5%8A%9F%E8%83%BD%E8%AF%B4%E6%98%8E)
+- [AI 配置与提示词](https://github.com/houshibo0101/survey-app/wiki/AI-%E9%85%8D%E7%BD%AE)
+- [部署指南](https://github.com/houshibo0101/survey-app/wiki/%E9%83%A8%E7%BD%B2%E6%8C%87%E5%8D%97)
+- [数据与备份](https://github.com/houshibo0101/survey-app/wiki/%E6%95%B0%E6%8D%AE%E4%B8%8E%E5%A4%87%E4%BB%BD)
+- [常见问题](https://github.com/houshibo0101/survey-app/wiki/%E5%B8%B8%E8%A7%81%E9%97%AE%E9%A2%98)

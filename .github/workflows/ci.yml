@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Python 语法检查
+        run: python -m py_compile server.py db.py ai.py
+
+      - name: 前端脚本语法检查
+        run: node --check static/app.js
+
+      - name: 启动服务并做接口冒烟测试
+        run: |
+          set -euo pipefail
+          export SURVEY_DATA="$RUNNER_TEMP/survey-data"
+          export SURVEY_ADMIN_PASSWORD="ci-admin-pass"
+          python server.py > "$RUNNER_TEMP/server.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill $SERVER_PID 2>/dev/null || true' EXIT
+
+          for i in $(seq 1 30); do
+            if curl -sf http://127.0.0.1:8090/api/health > /dev/null; then break; fi
+            sleep 0.5
+          done
+          echo "--- health ---"
+          curl -sf http://127.0.0.1:8090/api/health
+
+          echo "--- 注册 ---"
+          curl -sf -c "$RUNNER_TEMP/cookies.txt" \
+            -H "Content-Type: application/json" \
+            -d '{"username":"citester","password":"123456","display_name":"CI"}' \
+            http://127.0.0.1:8090/api/register
+
+          echo "--- 当前用户 ---"
+          curl -sf -b "$RUNNER_TEMP/cookies.txt" http://127.0.0.1:8090/api/me
+
+          echo "--- 问卷列表（含示例问卷） ---"
+          curl -sf -b "$RUNNER_TEMP/cookies.txt" http://127.0.0.1:8090/api/surveys | grep -q "示例问卷"
+
+          echo "--- 首页 ---"
+          curl -sf http://127.0.0.1:8090/ | grep -q "调查问卷系统"
+
+          echo "冒烟测试通过"
