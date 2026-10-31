@@ -1,0 +1,19 @@
+# 运行时数据与密钥（不要提交）
+data/
+.env
+ADMIN_PASSWORD.txt
+*.db
+*.log
+cpolar-survey.log*
+
+# 临时文件
+__pycache__/
+*.pyc
+.tmp/
+.tmp_gh_known_hosts
+.DS_Store
+Thumbs.db
+
+# 编辑器
+.vscode/
+.idea/

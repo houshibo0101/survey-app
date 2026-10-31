@@ -1,0 +1,17 @@
+[Unit]
+Description=Survey App - 调查问卷系统
+Documentation=https://www.cpolar.com/
+After=network.target
+
+[Service]
+Type=simple
+User=mc
+Group=mc
+WorkingDirectory=/opt/survey-app
+EnvironmentFile=/opt/survey-app/.env
+ExecStart=/usr/bin/python3 /opt/survey-app/server.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

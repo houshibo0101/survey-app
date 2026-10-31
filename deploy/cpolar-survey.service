@@ -1,0 +1,15 @@
+[Unit]
+Description=Cpolar tunnel for survey app (8090)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mc
+Group=mc
+ExecStart=/usr/local/bin/cpolar http 8090 -config=/home/mc/.cpolar-token.yml -log=/opt/survey-app/cpolar-survey.log
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
